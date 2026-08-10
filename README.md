@@ -370,8 +370,10 @@ write access to the repository, and creates no tag, so nothing reaches the publi
 repository is. The build jobs upload straight to that draft and never to an Actions artifact —
 artifacts on a public repository can be downloaded by anyone.
 
-`node scripts/site-sync.mjs ~/Downloads` then merges those downloads into `zyntaxai/` — installers
-into `releases/<version>/`, every platform entry into one `latest.json`, and a fresh `SHA256SUMS`.
+Each platform arrives as one `zyntaxai-<target>.zip` on the draft release. Drop those in `Builds/`,
+then `node scripts/site-sync.mjs Builds dist/release` unpacks them and merges everything into
+`zyntaxai/` — installers into `releases/<version>/`, every platform entry into one `latest.json`,
+and a fresh `SHA256SUMS`.
 Upload the release files before the manifest, or clients are told about a build that is not there
 yet.
 

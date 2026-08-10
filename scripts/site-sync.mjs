@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,16 +17,18 @@ site-sync — put built installers into the landing page and merge the manifests
 
   node scripts/site-sync.mjs [path ...]
 
-Each path may be a directory or a single file. With no arguments it uses
-dist/release, which is where \`pnpm release\` leaves a local build.
+Each path may be a directory, a single file, or a .zip built by CI — zips are
+unpacked automatically. With no arguments it uses dist/release, which is where
+\`pnpm release\` leaves a local build.
 
 It copies every installer into zyntaxai/releases/<version>/, merges any
 latest.json / latest-<target>.json it finds into zyntaxai/latest.json, keeping
 platform entries that are already there, and regenerates SHA256SUMS.
 
-Typical use after a CI build:
+Typical use after a CI build, with the zips downloaded into Builds/ and the
+Linux build made locally:
 
-  node scripts/site-sync.mjs ~/Downloads
+  node scripts/site-sync.mjs Builds dist/release
 
 Then upload zyntaxai/ — the release files first, latest.json last.
 `;
@@ -121,18 +125,33 @@ function collect(input) {
   } catch {
     fail(`no such path: ${input}`);
   }
-  if (stat.isFile()) return [resolved];
+  if (stat.isFile()) return expand(resolved);
 
   const found = [];
   const walk = (dir) => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
-      else found.push(full);
+      else found.push(...expand(full));
     }
   };
   walk(resolved);
   return found;
+}
+
+function expand(file) {
+  return file.toLowerCase().endsWith(".zip") ? collect(unpack(file)) : [file];
+}
+
+function unpack(zip) {
+  const into = fs.mkdtempSync(path.join(os.tmpdir(), "site-sync-"));
+  try {
+    execFileSync("unzip", ["-q", "-o", zip, "-d", into], { stdio: ["ignore", "ignore", "pipe"] });
+  } catch (err) {
+    fail(`could not unpack ${path.basename(zip)} — is \`unzip\` installed?\n${err.message}`);
+  }
+  console.log(`  unpacked ${path.basename(zip)}`);
+  return into;
 }
 
 function readJson(file) {
