@@ -66,7 +66,7 @@ pub fn register(app: &AppHandle, accelerator: &str) -> Result<Hotkey, RegisterEr
         .on_shortcut(shortcut, move |_app, _shortcut, event| {
 
 
-            if event.state() == ShortcutState::Pressed {
+            if event.state() == ShortcutState::Released {
                 crate::fix::trigger_from_selection(handle.clone());
             }
         })

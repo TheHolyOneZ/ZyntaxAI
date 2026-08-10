@@ -1,6 +1,6 @@
 {
   "name": "zyntax-ai",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "ZyntaxAI \u2014 cross-platform AI writing assistant",
   "scripts": {

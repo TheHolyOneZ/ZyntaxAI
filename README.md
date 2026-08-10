@@ -365,7 +365,10 @@ pnpm release --notes "What changed"
 That builds the current platform, collects the installers into `dist/release/<version>/` and writes
 that platform's entry into `dist/release/latest.json`. Windows and macOS are built by the **Release**
 workflow (`Actions → Release → Run workflow`), which signs them with the same key from repository
-secrets and attaches everything to a draft GitHub release.
+secrets and attaches everything to a draft GitHub release. A draft is readable only by people with
+write access to the repository, and creates no tag, so nothing reaches the public even though the
+repository is. The build jobs upload straight to that draft and never to an Actions artifact —
+artifacts on a public repository can be downloaded by anyone.
 
 `node scripts/site-sync.mjs ~/Downloads` then merges those downloads into `zyntaxai/` — installers
 into `releases/<version>/`, every platform entry into one `latest.json`, and a fresh `SHA256SUMS`.
@@ -375,6 +378,9 @@ yet.
 The variable is `TAURI_SIGNING_PRIVATE_KEY`, not `..._PATH`; the latter is a Tauri 1 name that the
 current CLI ignores while still producing a bundle, silently unsigned. The script fails the run if no
 signature ends up beside an artifact.
+
+The full walkthrough, including what `latest.json` is and how the signature check works, is in
+[`zyntaxai/PUBLISHING.md`](zyntaxai/PUBLISHING.md).
 
 </details>
 

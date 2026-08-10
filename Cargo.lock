@@ -6788,7 +6788,7 @@ dependencies = [
 
 [[package]]
 name = "zyntax"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "notify-rust",
@@ -6819,7 +6819,7 @@ dependencies = [
 
 [[package]]
 name = "zyntax-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "insta",
  "serde",
@@ -6830,7 +6830,7 @@ dependencies = [
 
 [[package]]
 name = "zyntax-platform"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "arboard",
@@ -6848,7 +6848,7 @@ dependencies = [
 
 [[package]]
 name = "zyntax-providers"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "async-trait",
  "reqwest 0.12.28",
@@ -6865,7 +6865,7 @@ dependencies = [
 
 [[package]]
 name = "zyntax-store"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "aes-gcm",
  "anyhow",

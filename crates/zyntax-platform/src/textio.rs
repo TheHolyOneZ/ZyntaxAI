@@ -24,7 +24,11 @@ pub enum PlatformError {
 }
 
 const CLIPBOARD_POLL_INTERVAL: Duration = Duration::from_millis(20);
-const CLIPBOARD_POLL_TIMEOUT: Duration = Duration::from_millis(400);
+const CLIPBOARD_POLL_TIMEOUT: Duration = Duration::from_millis(600);
+
+const COPY_ATTEMPTS: usize = 2;
+const CAPTURE_SENTINEL: &str = "\u{200b}zyntax\u{200b}";
+const MODIFIER_SETTLE: Duration = Duration::from_millis(60);
 
 const PASTE_SETTLE: Duration = Duration::from_millis(60);
 
@@ -32,6 +36,10 @@ const PASTE_SETTLE: Duration = Duration::from_millis(60);
 pub enum Chord {
     Copy,
     Paste,
+}
+
+fn is_fresh_copy(text: &str, baseline: Option<&str>) -> bool {
+    !text.trim().is_empty() && Some(text) != baseline
 }
 
 pub trait TextIo: Send {
@@ -111,24 +119,72 @@ impl DesktopTextIo {
         })
     }
 
-    fn copy_selection(&mut self) -> Result<String, PlatformError> {
-        let before = self.clipboard.snapshot();
+    fn release_modifiers(&mut self) {
+        if self.capabilities.injection != InjectionBackend::Native {
+            return;
+        }
 
-        self.synth_copy()?;
+        let Ok(mut enigo) = Enigo::new(&Settings::default()) else {
+            return;
+        };
 
+        for key in [Key::Control, Key::Alt, Key::Shift] {
+            let _ = enigo.key(key, Direction::Release);
+        }
+
+        std::thread::sleep(MODIFIER_SETTLE);
+    }
+
+    pub fn capture_by_copy(&mut self) -> Result<String, PlatformError> {
+        let snapshot = self.clipboard.snapshot();
+
+        self.release_modifiers();
+
+        let mut result = Err(PlatformError::NothingToCorrect);
+
+        for _ in 0..COPY_ATTEMPTS {
+            let baseline = self.mark_clipboard(&snapshot);
+
+            if let Err(err) = self.synth_copy() {
+                result = Err(err);
+                break;
+            }
+
+            if let Some(text) = self.poll_for_copy(baseline.as_deref()) {
+                result = Ok(text);
+                break;
+            }
+
+            tracing::debug!("the synthetic copy produced nothing; trying once more");
+        }
+
+        self.clipboard.restore(snapshot);
+        result
+    }
+
+    fn mark_clipboard(&mut self, snapshot: &Option<String>) -> Option<String> {
+        snapshot.as_ref()?;
+
+        match self.clipboard.set_text(CAPTURE_SENTINEL) {
+            Ok(()) => Some(CAPTURE_SENTINEL.to_owned()),
+            Err(_) => snapshot.clone(),
+        }
+    }
+
+    fn poll_for_copy(&mut self, baseline: Option<&str>) -> Option<String> {
         let deadline = std::time::Instant::now() + CLIPBOARD_POLL_TIMEOUT;
+
         while std::time::Instant::now() < deadline {
             std::thread::sleep(CLIPBOARD_POLL_INTERVAL);
 
-            if let Ok(current) = self.clipboard.text() {
-                let changed = before.as_deref() != Some(current.as_str());
-                if changed && !current.trim().is_empty() {
-                    return Ok(current);
+            if let Ok(text) = self.clipboard.text() {
+                if is_fresh_copy(&text, baseline) {
+                    return Some(text);
                 }
             }
         }
 
-        self.clipboard.text().map_err(PlatformError::from)
+        None
     }
 
     fn paste(&mut self, text: &str) -> Result<(), PlatformError> {
@@ -156,7 +212,7 @@ impl TextIo for DesktopTextIo {
 
             InputSource::Selection => match self.clipboard.primary_text() {
                 Ok(text) if !text.trim().is_empty() => text,
-                _ => self.copy_selection().unwrap_or_default(),
+                _ => self.capture_by_copy()?,
             },
         };
 
@@ -359,6 +415,23 @@ mod tests {
         io.deliver("fixed", "broke", OutputMode::Clipboard)
             .expect("clipboard needs no injection");
         assert_eq!(io.clipboard, "fixed");
+    }
+
+    #[test]
+    fn a_copy_is_fresh_only_once_the_marker_is_gone() {
+        let marker = Some(CAPTURE_SENTINEL);
+
+        assert!(is_fresh_copy("highlighted", marker));
+        assert!(!is_fresh_copy(CAPTURE_SENTINEL, marker));
+        assert!(!is_fresh_copy("   ", marker));
+
+        assert!(
+            is_fresh_copy("what was already on the clipboard", marker),
+            "a selection identical to the clipboard must still count as copied"
+        );
+
+        assert!(is_fresh_copy("anything", None));
+        assert!(!is_fresh_copy("unchanged", Some("unchanged")));
     }
 
     #[test]
