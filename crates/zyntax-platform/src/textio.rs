@@ -30,7 +30,7 @@ const COPY_ATTEMPTS: usize = 2;
 const CAPTURE_SENTINEL: &str = "\u{200b}zyntax\u{200b}";
 const MODIFIER_SETTLE: Duration = Duration::from_millis(60);
 
-const PASTE_SETTLE: Duration = Duration::from_millis(60);
+const PASTE_SETTLE: Duration = Duration::from_millis(250);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Chord {
@@ -195,6 +195,8 @@ impl DesktopTextIo {
 
         let snapshot = self.clipboard.snapshot();
         self.clipboard.set_text(text)?;
+
+        self.release_modifiers();
 
         let result = self.synth_paste();
 

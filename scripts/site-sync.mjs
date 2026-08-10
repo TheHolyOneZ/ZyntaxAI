@@ -70,8 +70,20 @@ const version =
 const versionDir = path.join(RELEASES, version);
 fs.mkdirSync(versionDir, { recursive: true });
 
+const publishable = installers.filter((file) => {
+  const name = path.basename(file);
+  const parent = path.basename(path.dirname(file));
+
+  const folder = /^\d+\.\d+\.\d+/.test(parent) && parent !== version ? parent : null;
+  const stamped = (name.match(/\d+\.\d+\.\d+/) || [])[0];
+  const other = folder ?? (stamped && stamped !== version ? stamped : null);
+
+  if (other) console.log(`  - ${name} (belongs to ${other})`);
+  return !other;
+});
+
 let copied = 0;
-for (const file of installers) {
+for (const file of publishable) {
   const target = path.join(versionDir, path.basename(file));
   if (fs.existsSync(target) && sha256(target) === sha256(file)) continue;
   fs.copyFileSync(file, target);

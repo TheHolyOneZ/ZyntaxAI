@@ -13,7 +13,7 @@ your document. Point it at a hosted model or one running entirely on your own ma
 [Platform support](#platform-support) · [Privacy](#privacy) ·
 [Build from source](#building-from-source)
 
-<img src="https://img.shields.io/badge/version-1.0.0-6366f1?style=flat-square" alt="Version 1.0.0">
+<img src="https://img.shields.io/badge/version-1.0.2-6366f1?style=flat-square" alt="Version 1.0.2">
 <img src="https://img.shields.io/badge/licence-GPL--3.0--or--later-6b7280?style=flat-square" alt="Licence GPL-3.0-or-later">
 <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-6b7280?style=flat-square" alt="Windows, Linux and macOS">
 
@@ -71,7 +71,7 @@ applied straight away with no overlay at all.
 
 ## Download
 
-Current release: **1.0.0**, from [zsync.eu/zyntaxai](https://zsync.eu/zyntaxai/).
+Current release: **1.0.2**, from [zsync.eu/zyntaxai](https://zsync.eu/zyntaxai/).
 
 | Platform | File | Notes |
 |---|---|---|
@@ -371,7 +371,7 @@ repository is. The build jobs upload straight to that draft and never to an Acti
 artifacts on a public repository can be downloaded by anyone.
 
 Each platform arrives as one `zyntaxai-<target>.zip` on the draft release. Drop those in `Builds/`,
-then `node scripts/site-sync.mjs Builds dist/release` unpacks them and merges everything into
+then `node scripts/site-sync.mjs Builds/*.zip dist/release` unpacks them and merges everything into
 `zyntaxai/` — installers into `releases/<version>/`, every platform entry into one `latest.json`,
 and a fresh `SHA256SUMS`.
 Upload the release files before the manifest, or clients are told about a build that is not there
