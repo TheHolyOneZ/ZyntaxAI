@@ -1,0 +1,122 @@
+name: Release
+
+# Builds Windows and macOS, signs them, and attaches one zip per platform to a
+# DRAFT release. A draft is readable only by people with write access and
+# creates no tag, so nothing is public. Nothing goes to an Actions artifact —
+# those can be downloaded by anyone on a public repository.
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "Release notes shown in the app's update prompt"
+        required: false
+        default: ""
+      linux:
+        description: "Also build Linux (normally built locally)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Create the draft release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Create it if it does not exist yet
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(jq -r .version src-tauri/tauri.conf.json)
+          tag="v$version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag already exists; the builds will add to it"
+            exit 0
+          fi
+
+          gh release create "$tag" \
+            --title "ZyntaxAI $version" \
+            --notes "${{ inputs.notes }}" \
+            --draft
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+
+        include: ${{ fromJSON(inputs.linux && '[{"os":"windows-latest","target":"windows-x86_64"},{"os":"macos-latest","target":"darwin-aarch64"},{"os":"macos-latest","target":"darwin-x86_64","triple":"x86_64-apple-darwin"},{"os":"ubuntu-22.04","target":"linux-x86_64"}]' || '[{"os":"windows-latest","target":"windows-x86_64"},{"os":"macos-latest","target":"darwin-aarch64"},{"os":"macos-latest","target":"darwin-x86_64","triple":"x86_64-apple-darwin"}]') }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Add the Rust target for a cross build
+        if: matrix.triple != ''
+        run: rustup target add ${{ matrix.triple }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Linux build dependencies
+        if: startsWith(matrix.target, 'linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+            libxdo-dev patchelf
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build and sign
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.triple }}" ]; then
+            pnpm release --target "${{ matrix.triple }}" --notes "${{ inputs.notes }}"
+          else
+            pnpm release --notes "${{ inputs.notes }}"
+          fi
+
+      - name: Name the manifest after its platform
+        shell: bash
+        run: mv dist/release/latest.json dist/release/latest-${{ matrix.target }}.json
+
+      - name: Zip it
+        shell: bash
+        run: |
+          cd dist/release
+          if command -v zip >/dev/null 2>&1; then
+            zip -r "../../zyntaxai-${{ matrix.target }}.zip" .
+          else
+            7z a "../../zyntaxai-${{ matrix.target }}.zip" .
+          fi
+
+      - name: Attach it to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        shell: bash
+        run: gh release upload "$TAG" "zyntaxai-${{ matrix.target }}.zip" --clobber
